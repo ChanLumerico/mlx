@@ -1216,6 +1216,29 @@ class TestConv(mlx_tests.MLXTestCase):
         self.assertTrue(mx.allclose(y, y_hat))
 
     @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
+    def test_conv_padded_channels_async_eval(self):
+        # Unaligned channels are padded to a multiple of 16 with a zero fill
+        # value that the GPU reads when the command buffer runs. Evaluate
+        # asynchronously and allocate new scalars while the convolution is
+        # queued, so a fill value that is not kept alive gets replaced.
+        mx.random.seed(0)
+        cases = [
+            (mx.conv2d, (64, 32, 32, 8), (8, 3, 3, 8)),
+            (mx.conv3d, (4, 8, 16, 16, 3), (24, 3, 3, 3, 3)),
+        ]
+        for conv, x_shape, w_shape in cases:
+            x = mx.random.normal(x_shape)
+            w = mx.random.normal(w_shape)
+            expected = conv(x, w, padding=1, stream=mx.cpu)
+            mx.eval(x, w, expected)
+            for _ in range(10):
+                y = conv(x, w, padding=1)
+                mx.async_eval(y)
+                scalars = [mx.array(1000.0 + i) for i in range(64)]
+                self.assertTrue(mx.allclose(y, expected, atol=1e-2))
+                mx.eval(scalars)
+
+    @unittest.skipIf(not mx.metal.is_available(), "requires Metal")
     def test_conv2d_winograd_batch_tiling(self):
         # Use envs to test tiling without allocating large buffers.
         tile_key = "MLX_CONV_WINOGRAD_TILE_BATCH"
