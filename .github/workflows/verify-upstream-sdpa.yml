@@ -14,7 +14,7 @@ jobs:
       - name: Build upstream main, unmodified
         run: |
           sw_vers
-          git log --oneline -1 HEAD~1
+          git log --oneline -1
           python -m venv /tmp/src
           /tmp/src/bin/pip install -q "setuptools>=80" "cmake>=3.25" typing_extensions numpy
           CMAKE_BUILD_PARALLEL_LEVEL=$(sysctl -n hw.ncpu) /tmp/src/bin/pip install -q --no-build-isolation -e .
