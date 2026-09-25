@@ -1,0 +1,36 @@
+name: Verify conv padding fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [verify/conv-pad-zero]
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Environment
+        run: |
+          sw_vers
+          xcodebuild -showComponent MetalToolchain
+      - name: New test against the released 0.32.2 wheel (expected to fail)
+        shell: bash {0}
+        run: |
+          python -m venv /tmp/wheel && /tmp/wheel/bin/pip install -q "mlx==0.32.2" numpy
+          cd python/tests && /tmp/wheel/bin/python -m unittest test_conv.TestConv.test_conv_padded_channels_async_eval 2>&1 | tail -4
+          cd ../.. && /tmp/wheel/bin/python .github/repro.py
+      - name: Build MLX with the fix
+        run: |
+          python -m venv /tmp/src
+          /tmp/src/bin/pip install -q "setuptools>=80" "cmake>=3.25" typing_extensions numpy
+          CMAKE_BUILD_PARALLEL_LEVEL=$(sysctl -n hw.ncpu) /tmp/src/bin/pip install -q --no-build-isolation -e .
+          /tmp/src/bin/python -c "import mlx.core as mx; print(mx.__version__)"
+      - name: New test and repro with the fix
+        run: |
+          cd python/tests && /tmp/src/bin/python -m unittest test_conv.TestConv.test_conv_padded_channels_async_eval
+          cd ../.. && /tmp/src/bin/python .github/repro.py
+      - name: Full python test suite with the fix
+        run: cd python/tests && /tmp/src/bin/python run.py
