@@ -1,0 +1,28 @@
+name: Upstream main SDPA D512 on a hosted runner
+on:
+  push:
+    branches: [verify/upstream-sdpa]
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build upstream main, unmodified
+        run: |
+          sw_vers
+          git log --oneline -1 HEAD~1
+          python -m venv /tmp/src
+          /tmp/src/bin/pip install -q "setuptools>=80" "cmake>=3.25" typing_extensions numpy
+          CMAKE_BUILD_PARALLEL_LEVEL=$(sysctl -n hw.ncpu) /tmp/src/bin/pip install -q --no-build-isolation -e .
+      - name: test_fast_sdpa
+        shell: bash {0}
+        run: |
+          cd python/tests && /tmp/src/bin/python -m unittest test_fast_sdpa.TestFastSDPA.test_sdpa_vector_head_dim_512 2>&1 | grep -E "RuntimeError|^Ran|^OK|^FAILED"
+          /tmp/src/bin/python -c "
+          import mlx.core as mx
+          print(\"device:\", mx.device_info().get(\"device_name\"), mx.device_info().get(\"architecture\"))
+          "
